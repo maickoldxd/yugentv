@@ -61,6 +61,8 @@ export interface TextTrackOption {
   default?: boolean;
 }
 
+import { P2PStatsModal } from "./p2p-stats-modal";
+
 interface VidstackPlayerProps {
   accent: string;
   backHref?: string;
@@ -315,6 +317,10 @@ function PlayerControls({
                   <VolumeSlider.Thumb className="absolute left-(--slider-fill) top-1/2 z-30 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-zinc-300 bg-white opacity-0 ring-white/40 transition-opacity group-hover/volume:opacity-100 group-data-active/volume:opacity-100 group-data-dragging/volume:ring-4 will-change-[left,opacity]" />
                 </VolumeSlider.Root>
               </div>
+
+              {process.env.NEXT_PUBLIC_SHOW_P2P_STATS === "true" && (
+                <P2PStatsModal />
+              )}
             </div>
 
             <div className="hidden xs:flex min-w-0 flex-1 flex-wrap items-center gap-3 lg:gap-4">
@@ -433,10 +439,26 @@ export function VidstackPlayer({
       // logs
       engine.addEventListener("onPeerConnect", (peer) => {
         console.log("[P2P] Peer connected:", peer.peerId);
+        window.dispatchEvent(
+          new CustomEvent("p2p-peer-connect", { detail: peer.peerId }),
+        );
+      });
+
+      engine.addEventListener("onPeerClose", (peerId) => {
+        console.log("[P2P] Peer disconnected:", peerId);
+        window.dispatchEvent(
+          new CustomEvent("p2p-peer-close", { detail: peerId }),
+        );
       });
 
       engine.addEventListener("onChunkDownloaded", (...args) => {
-        console.log("[P2P] Chunk:", ...args);
+        const [bytesLength, downloadSource, peerId] = args;
+        console.log("[P2P] Chunk:", bytesLength, downloadSource, peerId);
+        window.dispatchEvent(
+          new CustomEvent("p2p-chunk", {
+            detail: { bytesLength, downloadSource, peerId },
+          }),
+        );
       });
     });
   }
