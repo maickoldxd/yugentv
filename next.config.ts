@@ -1,7 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  serverExternalPackages: [
+    "p2p-media-loader-core",
+    "node-datachannel",
+    "webrtc-polyfill",
+    "bittorrent-tracker",
+    "p2p-media-loader-hlsjs",
+  ],
 };
 
 export default nextConfig;
