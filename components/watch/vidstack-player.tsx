@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, useRef, type CSSProperties } from "react";
 import "@vidstack/react/player/styles/default/theme.css";
 import "@vidstack/react/player/styles/default/layouts/video.css";
 
@@ -388,70 +388,93 @@ export function VidstackPlayer({
     "--media-focus-ring-color": accent,
     "--video-brand": accent,
   };
-  const remote = useMediaRemote();
+  const playerRef = useRef<import("@vidstack/react").MediaPlayerInstance>(null);
+  const remote = useMediaRemote(playerRef);
   const [visible, setVisible] = useState(true);
 
   function onProviderChange(provider: MediaProviderAdapter | null) {
-    if (isHLSProvider(provider)) {
-      import("p2p-media-loader-hlsjs").then(({ HlsJsP2PEngine }) => {
-        console.log("[P2P] Initializing P2P Media Loader Engine");
-        const engine = new HlsJsP2PEngine();
-        provider.config = {
-          ...provider.config,
-          ...engine.getConfigForHlsJs(),
-        };
+    if (!isHLSProvider(provider)) return;
 
-        engine.addEventListener(
-          "onChunkDownloaded",
-          (bytesLength, downloadSource, peerId) => {
-            console.log(
-              `[P2P] Chunk downloaded: ${bytesLength} bytes from ${downloadSource} ${peerId ? "(peer: " + peerId + ")" : "(server)"}`,
-            );
+    import("p2p-media-loader-hlsjs").then(({ HlsJsP2PEngine }) => {
+      console.log("[P2P] Initializing Engine");
+
+      const engine = new HlsJsP2PEngine({
+        core: {
+          announceTrackers: [
+            "wss://tracker.openwebtorrent.com",
+            "wss://tracker.webtorrent.dev",
+          ],
+          rtcConfig: {
+            iceServers: [
+              { urls: "stun:stun.l.google.com:19302" },
+              { urls: "stun:global.stun.twilio.com:3478" },
+            ],
           },
-        );
-
-        engine.addEventListener("onSegmentLoaded", (...args) => {
-          console.log(`[P2P] Segment loaded:`, ...args);
-        });
-
-        // You might need to bind the HLS instance to the engine once it's created.
-        provider.onInstance((hlsInstance) => {
-          console.log("[P2P] Binding HLS instance to P2P Engine");
-          engine.bindHls(hlsInstance);
-        });
+        },
       });
-    }
+
+      provider.config = {
+        ...provider.config,
+        ...engine.getConfigForHlsJs(),
+        enableWorker: false, // Critical: Custom loaders cannot be passed to a web worker
+      };
+
+      provider.onInstance((hls) => {
+        if (!hls) return;
+
+        console.log("[P2P] HLS instance ready");
+
+        // 🔥 bind después
+        engine.bindHls(hls);
+
+        console.log("[P2P] Engine bound to HLS");
+      });
+
+      // logs
+      engine.addEventListener("onPeerConnect", (peer) => {
+        console.log("[P2P] Peer connected:", peer.peerId);
+      });
+
+      engine.addEventListener("onChunkDownloaded", (...args) => {
+        console.log("[P2P] Chunk:", ...args);
+      });
+    });
   }
 
   useEffect(() => {
     let timeout: NodeJS.Timeout;
 
-    const show = () => {
+    const handleInteraction = () => {
       setVisible(true);
-      remote.toggleControls();
+      if (playerRef.current) {
+        playerRef.current.controls.show();
+      }
       clearTimeout(timeout);
 
       timeout = setTimeout(() => {
         setVisible(false);
-        remote.toggleControls();
-      }, 2000);
+        if (playerRef.current) {
+          playerRef.current.controls.hide();
+        }
+      }, 2500);
     };
 
-    show(); // initial
+    handleInteraction(); // initial
 
-    window.addEventListener("mousemove", show);
-    window.addEventListener("touchstart", show);
+    window.addEventListener("mousemove", handleInteraction);
+    window.addEventListener("touchstart", handleInteraction);
 
     return () => {
-      window.removeEventListener("mousemove", show);
-      window.removeEventListener("touchstart", show);
+      window.removeEventListener("mousemove", handleInteraction);
+      window.removeEventListener("touchstart", handleInteraction);
       clearTimeout(timeout);
     };
-  }, [remote]);
+  }, []);
 
   return (
     <>
       <MediaPlayer
+        ref={playerRef}
         className="h-dvh w-full max-w-full overflow-hidden bg-black [--media-menu-border:0] [--media-slider-thumb-border:0] [--media-thumbnail-border:0] [--media-time-border:0] [--media-tooltip-border:0]"
         load="visible"
         onProviderChange={onProviderChange}
