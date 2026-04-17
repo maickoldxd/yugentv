@@ -34,7 +34,6 @@ import {
   useMediaState,
   Gesture,
   useMediaRemote,
-  useVideoQualityOptions,
   isHLSProvider,
   type MediaProviderAdapter,
 } from "@vidstack/react";
@@ -105,10 +104,6 @@ function ControlIcon({
 function SettingsMenu() {
   const captions = useCaptionOptions({ off: "Off" });
   const playbackRate = useMediaState("playbackRate");
-  const qualities = useVideoQualityOptions({
-    auto: "Auto",
-    sort: "descending",
-  });
 
   return (
     <Menu.Root>
@@ -141,38 +136,6 @@ function SettingsMenu() {
               </SpeedSlider.Track>
               <SpeedSlider.Thumb className="absolute left-(--slider-fill) top-1/2 z-30 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-zinc-300 bg-white opacity-0 ring-white/40 transition-opacity group-hover/speed:opacity-100 group-data-active/speed:opacity-100 group-data-dragging/speed:ring-4 will-change-[left,opacity]" />
             </SpeedSlider.Root>
-          </div>
-
-          <div>
-            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.28em] text-white/45">
-              Quality
-            </p>
-            <div className="mt-3 space-y-1.5 min-h-30 max-h-40 overflow-y-auto">
-              {qualities.disabled ? (
-                <div className="rounded-2xl bg-white/6 px-3 py-2 text-sm text-white/48">
-                  No quality options available.
-                </div>
-              ) : (
-                qualities.map((option) => (
-                  <button
-                    key={option.value}
-                    className={[
-                      "flex w-full cursor-pointer items-center justify-between rounded-2xl px-3 py-2 text-left text-sm transition outline-none",
-                      option.selected
-                        ? "bg-white/12 text-white"
-                        : "bg-transparent text-white/66 hover:bg-white/8 focus-visible:bg-white/8 hover:text-white focus-visible:text-white",
-                    ].join(" ")}
-                    onClick={() => option.select()}
-                    type="button"
-                  >
-                    <span>{option.label}</span>
-                    {option.selected ? (
-                      <span className="text-white/78">Selected</span>
-                    ) : null}
-                  </button>
-                ))
-              )}
-            </div>
           </div>
 
           <div>
@@ -212,7 +175,7 @@ function SettingsMenu() {
   );
 }
 
-function PlayerControls({
+function DesktopControls({
   backHref,
   backLabel,
   episodes,
@@ -242,7 +205,7 @@ function PlayerControls({
     "inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/18 disabled:cursor-not-allowed disabled:opacity-35";
 
   return (
-    <>
+    <div className="flex pointer-coarse:hidden flex-col w-full h-full justify-between pointer-events-none">
       <Controls.Group
         className={`pointer-events-auto flex items-start justify-between gap-3 ${isFullScreen ? "mt-6" : ""}`}
       >
@@ -372,7 +335,159 @@ function PlayerControls({
           </div>
         </Controls.Group>
       </div>
-    </>
+    </div>
+  );
+}
+
+function MobileControls({
+  backHref,
+  backLabel,
+  episodes,
+  episodesLabel,
+  nextEpisode,
+  subtitle,
+  title,
+}: {
+  backHref?: string;
+  backLabel?: string;
+  episodes: EpisodeOption[];
+  episodesLabel: string;
+  nextEpisode?: NextEpisodeOption | null;
+  subtitle?: string;
+  title: string;
+}) {
+  const isPaused = useMediaState("paused");
+  const isFullscreen = useMediaState("fullscreen");
+  const isMuted = useMediaState("muted");
+  const isPip = useMediaState("pictureInPicture");
+  const volume = useMediaState("volume");
+
+  const iconButtonClass =
+    "inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/18 disabled:cursor-not-allowed disabled:opacity-35";
+
+  return (
+    <div className="hidden pointer-coarse:flex flex-col w-full h-full justify-between pointer-events-none">
+      {/* Top Bar */}
+      <Controls.Group className="pointer-events-auto flex w-full items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          {backHref ? (
+            <Link
+              className="inline-flex h-10 cursor-pointer items-center justify-center rounded-full bg-white/10 px-3 text-sm font-semibold text-white transition hover:bg-white/18 disabled:cursor-not-allowed disabled:opacity-35"
+              href={backHref}
+            >
+              <ControlIcon inverted src="/icons/arrowLeft.svg" />
+            </Link>
+          ) : null}
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate font-display text-sm tracking-wide text-white">
+              {title}
+            </span>
+            {subtitle ? (
+              <span className="truncate text-[0.65rem] uppercase tracking-[0.2em] text-white/48">
+                {subtitle}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          {process.env.NEXT_PUBLIC_SHOW_P2P_STATS === "true" && (
+            <P2PStatsModal />
+          )}
+          <SettingsMenu />
+        </div>
+      </Controls.Group>
+
+      {/* Middle Controls (Play/Pause, Seek) */}
+      <Controls.Group className="pointer-events-none flex flex-1 w-full items-center justify-center gap-8 xs:gap-12">
+        <SeekButton
+          className="pointer-events-auto inline-flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-white/20 active:scale-95"
+          seconds={-5}
+        >
+          <ControlIcon inverted src="/icons/backward5s.svg" />
+        </SeekButton>
+
+        <PlayButton className="pointer-events-auto inline-flex h-20 w-20 cursor-pointer items-center justify-center rounded-full bg-white text-black shadow-xl transition-all hover:bg-white/90 active:scale-95">
+          {isPaused ? (
+            <ControlIcon src="/icons/play.svg" className="ml-1 w-8 h-8" />
+          ) : (
+            <ControlIcon src="/icons/pause.svg" className="w-8 h-8" />
+          )}
+        </PlayButton>
+
+        <SeekButton
+          className="pointer-events-auto inline-flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition hover:bg-white/20 active:scale-95"
+          seconds={15}
+        >
+          <ControlIcon inverted src="/icons/forward15s.svg" />
+        </SeekButton>
+      </Controls.Group>
+
+      {/* Bottom Bar */}
+      <Controls.Group className="pointer-events-auto flex w-full flex-col gap-2 relative">
+        <div className="flex w-full items-center gap-2 px-1">
+          <Time
+            className="text-[0.7rem] font-medium tabular-nums tracking-wide text-white/70"
+            type="current"
+          />
+
+          <TimeSlider.Root className="group/timeline relative inline-flex h-10 flex-1 cursor-pointer touch-none select-none items-center outline-none aria-hidden:hidden">
+            <TimeSlider.Track className="relative z-0 h-[3px] w-full rounded-sm bg-white/30 transition-all group-data-focus/timeline:ring-[3px] group-data-focus/timeline:ring-orange-400/40">
+              <TimeSlider.TrackFill className="absolute z-20 h-full w-(--slider-fill) rounded-sm bg-orange-400 will-change-[width]" />
+              <TimeSlider.Progress className="absolute z-10 h-full w-(--slider-progress) rounded-sm bg-white/50 will-change-[width]" />
+            </TimeSlider.Track>
+            <TimeSlider.Thumb className="absolute left-(--slider-fill) top-1/2 z-30 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-zinc-300 bg-white opacity-0 transition-opacity group-hover/timeline:opacity-100 group-data-active/timeline:opacity-100 group-data-dragging/timeline:opacity-100 group-data-dragging/timeline:ring-4 will-change-[left,opacity]" />
+          </TimeSlider.Root>
+
+          <Time
+            className="text-[0.7rem] font-medium tabular-nums tracking-wide text-white/50"
+            type="duration"
+          />
+        </div>
+
+        <div className="flex min-w-0 w-full items-center justify-between pb-1">
+          <div className="flex items-center gap-2">
+            {nextEpisode ? (
+              <Link
+                className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full bg-white/15 px-3 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-white/25 active:scale-95"
+                href={nextEpisode.href}
+              >
+                <ControlIcon
+                  inverted
+                  src="/icons/nextEpisode.svg"
+                  className="w-4 h-4"
+                />
+                <span className="hidden leading-none xs:block">
+                  {nextEpisode.label}
+                </span>
+              </Link>
+            ) : null}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <GoogleCastButton className={iconButtonClass}>
+              <Cast className="size-4" />
+            </GoogleCastButton>
+
+            <PIPButton className={iconButtonClass}>
+              {isPip ? (
+                <Minimize className="size-4" />
+              ) : (
+                <PictureInPicture2 className="size-4" />
+              )}
+            </PIPButton>
+
+            <FullscreenButton className={iconButtonClass}>
+              {isFullscreen ? (
+                <Minimize className="size-4" />
+              ) : (
+                <Expand className="size-4" />
+              )}
+            </FullscreenButton>
+          </div>
+        </div>
+      </Controls.Group>
+    </div>
   );
 }
 
@@ -416,6 +531,8 @@ export function VidstackPlayer({
               { urls: "stun:global.stun.twilio.com:3478" },
             ],
           },
+          httpDownloadTimeWindow: 45, // Cap pre-download HTTP to 45 seconds ahead
+          p2pDownloadTimeWindow: 60, // Cap pre-download P2P to 60 seconds ahead
         },
       });
 
@@ -423,6 +540,8 @@ export function VidstackPlayer({
         ...provider.config,
         ...engine.getConfigForHlsJs(),
         enableWorker: false, // Critical: Custom loaders cannot be passed to a web worker
+        maxBufferLength: 30, // Limit native HLS buffer to 30 seconds
+        maxMaxBufferLength: 60, // Absolute limit native HLS buffer limit to 60 seconds
       };
 
       provider.onInstance((hls) => {
@@ -545,7 +664,16 @@ export function VidstackPlayer({
         <Controls.Root
           className={`absolute inset-0 flex flex-col justify-between bg-[linear-gradient(180deg,rgba(4,6,12,0.56)_0%,rgba(4,6,12,0.06)_24%,rgba(4,6,12,0)_46%,rgba(4,6,12,0.9)_100%)] px-4 pb-4 pt-4 sm:px-6 sm:pb-6 lg:px-10 lg:pb-8 transition-opacity duration-300 ${visible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
         >
-          <PlayerControls
+          <DesktopControls
+            backHref={backHref}
+            backLabel={backLabel}
+            episodes={episodes}
+            episodesLabel={episodesLabel}
+            nextEpisode={nextEpisode}
+            subtitle={subtitle}
+            title={title}
+          />
+          <MobileControls
             backHref={backHref}
             backLabel={backLabel}
             episodes={episodes}

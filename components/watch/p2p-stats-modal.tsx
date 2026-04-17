@@ -33,13 +33,13 @@ export function P2PStatsModal() {
   const [p2pTotal, setP2pTotal] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
 
-  // We'll track intervals for the chart (e.g. every 2 seconds)
+  // We'll track totals synchronously for the chart
   const [history, setHistory] = useState<
     { time: string; http: number; p2p: number }[]
   >([]);
 
-  // Track the current interval's bytes
-  const currentInterval = useRef({ http: 0, p2p: 0 });
+  // Track the actual running totals synchronously
+  const totalsData = useRef({ http: 0, p2p: 0 });
 
   const qualities = useVideoQualityOptions({
     auto: "Auto",
@@ -70,10 +70,10 @@ export function P2PStatsModal() {
       const { bytesLength, downloadSource } = (e as CustomEvent).detail;
       if (downloadSource === "http") {
         setHttpTotal((prev) => prev + bytesLength);
-        currentInterval.current.http += bytesLength;
+        totalsData.current.http += bytesLength;
       } else {
         setP2pTotal((prev) => prev + bytesLength);
-        currentInterval.current.p2p += bytesLength;
+        totalsData.current.p2p += bytesLength;
       }
     };
 
@@ -89,28 +89,28 @@ export function P2PStatsModal() {
   }, []);
 
   useEffect(() => {
-    // Interval to push data to chart every 2 seconds
+    // Interval to push cumulative data to chart every 2 seconds
     if (!isOpen) return;
 
     const interval = setInterval(() => {
       const now = new Date();
       const timeLabel = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
 
+      const currentHttp = totalsData.current.http;
+      const currentP2p = totalsData.current.p2p;
+
       setHistory((prev) => {
         const newHistory = [
           ...prev,
           {
             time: timeLabel,
-            http: currentInterval.current.http,
-            p2p: currentInterval.current.p2p,
+            http: currentHttp,
+            p2p: currentP2p,
           },
         ];
-        // Keep the last 15 points (30 seconds)
-        return newHistory.slice(-15);
+        // Keep the last 30 points (1 minute)
+        return newHistory.slice(-30);
       });
-
-      // Reset interval counters
-      currentInterval.current = { http: 0, p2p: 0 };
     }, 2000);
 
     return () => clearInterval(interval);
@@ -120,15 +120,19 @@ export function P2PStatsModal() {
     labels: history.map((h) => h.time),
     datasets: [
       {
-        label: "HTTP (Bytes/2s)",
-        data: history.map((h) => h.http),
+        label: "HTTP (Cumulative MB)",
+        data: history.map((h) =>
+          parseFloat((h.http / (1024 * 1024)).toFixed(2)),
+        ),
         borderColor: "rgb(255, 99, 132)",
         backgroundColor: "rgba(255, 99, 132, 0.5)",
         tension: 0.2, // smoothing
       },
       {
-        label: "P2P (Bytes/2s)",
-        data: history.map((h) => h.p2p),
+        label: "P2P (Cumulative MB)",
+        data: history.map((h) =>
+          parseFloat((h.p2p / (1024 * 1024)).toFixed(2)),
+        ),
         borderColor: "rgb(53, 162, 235)",
         backgroundColor: "rgba(53, 162, 235, 0.5)",
         tension: 0.2,
@@ -143,7 +147,7 @@ export function P2PStatsModal() {
         beginAtZero: true,
         ticks: {
           callback: function (value: any) {
-            return (value / 1024).toFixed(0) + " KB";
+            return value + " MB";
           },
         },
       },
